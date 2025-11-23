@@ -2,7 +2,7 @@ NAME = n_puzzle
 CXX = c++
 CXXFLAGS = -Wall -Wextra -Werror -std=c++17
 
-SRCS = npzzle.cpp
+SRCS = npuzzle.cpp
 OBJS = $(SRCS:.cpp=.o)
 
 all : $(NAME)
