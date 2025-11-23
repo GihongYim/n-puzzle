@@ -5,6 +5,7 @@
 
 int main(int argc, char* argv[])
 {
+    // read input from file
     if (argc != 2)
     {
         std::cerr << "Usage: " << argv[0] << " <input_file>" << std::endl;
@@ -18,6 +19,7 @@ int main(int argc, char* argv[])
         return 1;
     }
 
+    // read num of integers
     int n;
 
     inputFile >> n;
@@ -27,6 +29,7 @@ int main(int argc, char* argv[])
         return 1;
     }
 
+    // read n + 1 integers
     std::vector<int> numbers(n);
 
     for (int i = 0; i < n; ++i)
@@ -38,6 +41,8 @@ int main(int argc, char* argv[])
             return 1;
         }
     }
+
+    
 
     return 0;
 }
