@@ -1,6 +1,7 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
+#include <limits.h>
 
 typedef std::vector<std::vector<int>> vector2D;
 
@@ -37,11 +38,60 @@ vector2D createSnailGoal(int n) {
     return goal;
 }
 
+std::vector<int> findPosition(const vector2D& board, int value) {
+    std::vector<int> pos(2);
+
+    for (int i = 0; i < (int)board.size(); ++i) {
+        for (int j = 0; j < (int)board[i].size(); ++j) {
+            if (board[i][j] == value) {
+                pos[0] = i;
+                pos[1] = j;
+                return pos;
+            }
+        }
+    }
+
+    pos[0] = -1;
+    pos[1] = -1;
+    return pos;
+}
+
+int getManhattanDistance(const vector2D& current, const vector2D& goal) {
+    int distance = 0;
+    int n = current.size();
+
+    for (int i = 0; i < n; ++i) {
+        for (int j = 0; j < n; ++j) {
+            int value = current[i][j];
+            if (value != 0) { 
+                std::vector<int> pos = findPosition(goal, value);
+                int targetX = pos[0];
+                int targetY = pos[1];
+    
+                distance += abs(i - targetX) + abs(j - targetY);
+            }
+        }
+    }
+
+    return distance;
+}
+
 vector2D selectBestNode(const std::vector<vector2D>& opened)
 {
-    // n puzzle specific logic to select the best node
-    // get
+    int bestIndex = 0;
+    int minDistance = INT_MAX;
 
+    const vector2D& goal = createSnailGoal(opened[0].size());
+    
+    for (int i = 0; i < (int)opened.size(); ++i) {
+        int distance = getManhattanDistance(opened[i], goal);
+        if (distance < minDistance) {
+            minDistance = distance;
+            bestIndex = i;
+        }
+    }
+
+    return opened[bestIndex];
 
 }
 
@@ -75,32 +125,18 @@ int main(int argc, char* argv[])
         numbers[i].resize(n);
         for (int j = 0; j < n; j++) {
             inputFile >> numbers[i][j];
-            std::cout << "Read number: " << numbers[i][j] << std::endl;
         }
     }
 
     inputFile.close();
 
+    // A* alhorithm initialization
     std::vector<vector2D> opened;
     opened.push_back(numbers);
 
     std::vector<vector2D> closed;
 
-    vector2D goalState; // Define the goal state as needed
-    {
-        int count = 1;
-        for (int i = 0; i < n; ++i) {
-            std::vector<int> row;
-            for (int j = 0; j < n; ++j) {
-                if (i == n - 1 && j == n - 1) {
-                    row.push_back(0); // Assuming 0 represents the empty tile
-                } else {
-                    row.push_back(count++);
-                }
-            }
-            goalState.push_back(row);
-        }
-    }
+    vector2D goalState = createSnailGoal(n);
 
     bool bSuccess = false;
     std::cout << "Initialized opened with the first configuration." << std::endl;
@@ -109,7 +145,14 @@ int main(int argc, char* argv[])
     {
         vector2D e = selectBestNode(opened);
 
-        opened.pop_back();
+        // Check Next Step
+        if (e == goalState)
+        {
+            bSuccess = true;
+            std::cout << "Goal state reached!" << std::endl;
+            break;
+        }
+
         closed.push_back(e);
     }
 
