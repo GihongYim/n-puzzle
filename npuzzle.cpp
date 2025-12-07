@@ -34,7 +34,14 @@ vector2D createSnailGoal(int n) {
     }
 
     // 마지막 칸은 빈 칸
-    goal[n-1][n-1] = 0;
+
+    for (int i = 0; i < n; ++i) {
+        for (int j = 0; j < n; ++j) {
+            if (goal[i][j] == n * n) {
+                goal[i][j] = 0;
+            }
+        }
+    }
     return goal;
 }
 
@@ -56,32 +63,28 @@ std::vector<int> findPosition(const vector2D& board, int value) {
     return pos;
 }
 
-int getManhattanDistance(const vector2D& current, const vector2D& goal) {
+int getManhattanDistance(const std::pair<vector2D, int>& current, const vector2D& goal) {
+    int n = current.first.size();
     int distance = 0;
-    int n = current.size();
-
-    for (int i = 0; i < n; ++i) {
-        for (int j = 0; j < n; ++j) {
-            int value = current[i][j];
-            if (value != 0) { 
-                std::vector<int> pos = findPosition(goal, value);
-                int targetX = pos[0];
-                int targetY = pos[1];
-    
-                distance += abs(i - targetX) + abs(j - targetY);
+    for (int i = 0; i < (int)current.first.size(); i++) {
+        for (int x = 0; x < n; x++) {
+            for (int y = 0; y < n; y++) {
+                int value = current.first[x][y];
+                distance += (value != 0) ? abs(x - findPosition(goal, value)[0]) + abs(y - findPosition(goal, value)[1]) : 0;
             }
         }
+        
     }
 
     return distance;
 }
 
-vector2D selectBestNode(const std::vector<vector2D>& opened)
+std::pair<vector2D, int> selectBestNode(std::vector<std::pair<vector2D, int>>& opened)
 {
     int bestIndex = 0;
     int minDistance = INT_MAX;
 
-    const vector2D& goal = createSnailGoal(opened[0].size());
+    const vector2D& goal = createSnailGoal(opened[0].first.size());
     
     for (int i = 0; i < (int)opened.size(); ++i) {
         int distance = getManhattanDistance(opened[i], goal);
@@ -91,8 +94,46 @@ vector2D selectBestNode(const std::vector<vector2D>& opened)
         }
     }
 
-    return opened[bestIndex];
+    std::pair<vector2D, int> bestNode = opened[bestIndex];
+    opened.erase(opened.begin() + bestIndex);
 
+    return bestNode;
+}
+
+std::vector<vector2D> getNextSteps(const vector2D& current)
+{
+    std::vector<vector2D> nextSteps;
+    int n = current.size();
+    int zeroX, zeroY;
+
+    for (int i = 0; i < n; ++i) {
+        for (int j = 0; j < n; ++j) {
+            if (current[i][j] == 0) {
+                zeroX = i;
+                zeroY = j;
+            }
+        }
+    }
+
+    const std::vector<std::pair<int, int>> directions = {
+        { -1, 0 }, // 위
+        { 1, 0 },  // 아래
+        { 0, -1 }, // 왼쪽
+        { 0, 1 }   // 오른쪽
+    };
+
+    for (const auto& dir : directions) {
+        int newX = zeroX + dir.first;
+        int newY = zeroY + dir.second;
+
+        if (newX >= 0 && newX < n && newY >= 0 && newY < n) {
+            vector2D newStep = current;
+            std::swap(newStep[zeroX][zeroY], newStep[newX][newY]);
+            nextSteps.push_back(newStep);
+        }
+    }
+
+    return nextSteps;
 }
 
 int main(int argc, char* argv[])
@@ -131,29 +172,73 @@ int main(int argc, char* argv[])
     inputFile.close();
 
     // A* alhorithm initialization
-    std::vector<vector2D> opened;
-    opened.push_back(numbers);
+    std::vector<std::pair<vector2D, int>> opened;
+    opened.push_back(std::make_pair(numbers, 0));
 
-    std::vector<vector2D> closed;
+    std::vector<std::pair<vector2D, int>> closed;
 
     vector2D goalState = createSnailGoal(n);
+
+    for (int i = 0; i < n; ++i) {
+        for (int j = 0; j < n; ++j) {
+            std::cout << goalState[i][j] << " ";
+        }
+        std::cout << std::endl;
+    }
 
     bool bSuccess = false;
     std::cout << "Initialized opened with the first configuration." << std::endl;
 
     while (!opened.empty() && !bSuccess)
     {
-        vector2D e = selectBestNode(opened);
+        // Select Best Node
+        std::pair<vector2D, int> e = selectBestNode(opened);
 
         // Check Next Step
-        if (e == goalState)
+        if (e.first == goalState)
         {
             bSuccess = true;
             std::cout << "Goal state reached!" << std::endl;
+            std::cout << "Cost: " << e.second << std::endl;
             break;
         }
 
         closed.push_back(e);
+
+        std::vector<vector2D> nextSteps;
+    
+        // 다음 방향 생성
+        nextSteps = getNextSteps(e.first);
+
+        std::cout << "Expanding node with cost " << e.second << ", generated " << nextSteps.size() << " next steps." << std::endl;
+
+        // 다음 방향들 중에서 opened와 closed에 없는 것들만 추가
+        for (const auto& step : nextSteps) {
+            bool inClosed = false;
+            for (const auto& closedState : closed) {
+                if (step == closedState.first) {
+                    inClosed = true;
+                    break;
+                }
+            }
+
+            if (inClosed) {
+                continue;
+            }
+
+            bool inOpened = false;
+            for (const auto& openedState : opened) {
+                if (step == openedState.first) {
+                    inOpened = true;
+                    break;
+                }
+            }
+
+            if (!inOpened && !inClosed) {
+                opened.push_back(std::make_pair(step, e.second + 1));
+            }
+        }
+        std::cout << "Opened size: " << opened.size() << ", Closed size: " << closed.size() << std::endl;
     }
 
     return 0;
