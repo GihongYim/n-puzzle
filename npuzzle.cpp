@@ -34,7 +34,6 @@ vector2D createSnailGoal(int n) {
     }
 
     // 마지막 칸은 빈 칸
-
     for (int i = 0; i < n; ++i) {
         for (int j = 0; j < n; ++j) {
             if (goal[i][j] == n * n) {
