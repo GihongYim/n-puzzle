@@ -1,9 +1,74 @@
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <vector>
+#include <string>
+#include <queue>
 #include <limits.h>
+#include <unordered_map>
 
-typedef std::vector<std::vector<int>> vector2D;
+using StateHash = std::string;
+using vector2D = std::vector<std::vector<int>>;
+
+struct State {
+    vector2D board;
+    int g;
+    int h;
+};
+
+struct CompareNode {
+    bool operator()(const State& a, const State& b) const {
+        return (a.g + a.h) > (b.g + b.h);
+    }
+};
+
+bool readPuzzle(std::ifstream& file, vector2D& board, int& n)
+{
+    std::string line;
+
+    // 1️⃣ n 읽기 (주석 스킵)
+    while (std::getline(file, line)) {
+        if (line.empty() || line[0] == '#')
+            continue;
+
+        std::stringstream ss(line);
+        ss >> n;
+        break;
+    }
+
+    if (n <= 0)
+        return false;
+
+    board.resize(n, std::vector<int>(n));
+
+    // 2️⃣ 퍼즐 읽기
+    int row = 0;
+    while (row < n && std::getline(file, line)) {
+        if (line.empty() || line[0] == '#')
+            continue;
+
+        std::stringstream ss(line);
+        for (int col = 0; col < n; col++) {
+            if (!(ss >> board[row][col]))
+                return false;
+        }
+        row++;
+    }
+
+    return row == n;
+}
+
+StateHash makeHash(const vector2D& state) {
+    StateHash hash;
+
+    for (int i = 0; i < (int)state.size(); i++) {
+        for (int j = 0; j < (int)state[i].size(); j++) {
+            hash += char(state[i][j] + '0');
+            hash += ',';
+        }
+    }
+    return hash;
+}
 
 vector2D createSnailGoal(int n) {
     vector2D goal(n, std::vector<int>(n, 0));
@@ -62,51 +127,36 @@ std::vector<int> findPosition(const vector2D& board, int value) {
     return pos;
 }
 
-int getManhattanDistance(const std::pair<vector2D, int>& current, const vector2D& goal) {
-    int n = current.first.size();
+int Manhattan(const vector2D& current, const vector2D& goal) {
+    int n = current.size();
     int distance = 0;
-    for (int i = 0; i < (int)current.first.size(); i++) {
-        for (int x = 0; x < n; x++) {
-            for (int y = 0; y < n; y++) {
-                int value = current.first[x][y];
-                distance += (value != 0) ? abs(x - findPosition(goal, value)[0]) + abs(y - findPosition(goal, value)[1]) : 0;
+    
+    for (int x = 0; x < n; x++) {
+        for (int y = 0; y < n; y++) {
+            int v = current[x][y];
+            if (v == 0) continue;
+
+            for (int i = 0; i < n; i++) {
+                for (int j = 0; j < n; j++) {
+                    if (goal[i][j] == v) {
+                        distance += abs(x - i) + abs(y - j);
+                    }
+                }
             }
         }
-        
     }
 
     return distance;
 }
 
-std::pair<vector2D, int> selectBestNode(std::vector<std::pair<vector2D, int>>& opened)
-{
-    int bestIndex = 0;
-    int minDistance = INT_MAX;
-
-    const vector2D& goal = createSnailGoal(opened[0].first.size());
-    
-    for (int i = 0; i < (int)opened.size(); ++i) {
-        int distance = getManhattanDistance(opened[i], goal);
-        if (distance < minDistance) {
-            minDistance = distance;
-            bestIndex = i;
-        }
-    }
-
-    std::pair<vector2D, int> bestNode = opened[bestIndex];
-    opened.erase(opened.begin() + bestIndex);
-
-    return bestNode;
-}
-
-std::vector<vector2D> getNextSteps(const vector2D& current)
+std::vector<vector2D> expand(const vector2D& current)
 {
     std::vector<vector2D> nextSteps;
     int n = current.size();
     int zeroX, zeroY;
 
-    for (int i = 0; i < n; ++i) {
-        for (int j = 0; j < n; ++j) {
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < n; j++) {
             if (current[i][j] == 0) {
                 zeroX = i;
                 zeroY = j;
@@ -148,97 +198,66 @@ int main(int argc, char* argv[])
 
     std::ifstream inputFile(input_file);
 
-    if (!inputFile.is_open())
+    vector2D start;
+    int n;
+
+    if (!readPuzzle(inputFile, start, n))
     {
-        std::cerr << "Error: Could not open file " << input_file << std::endl;
+        std::cerr << "Invalid puzzle format\n";
         return 1;
     }
 
     // Read an integer from the file
-    int n;
-    inputFile >> n;
-
     std::cout << "Read integer: " << n << std::endl;
-
-    vector2D numbers(n);
-    for (int i = 0; i < n; i++) {
-        numbers[i].resize(n);
-        for (int j = 0; j < n; j++) {
-            inputFile >> numbers[i][j];
-        }
-    }
-
+    
     inputFile.close();
 
-    // A* alhorithm initialization
-    std::vector<std::pair<vector2D, int>> opened;
-    opened.push_back(std::make_pair(numbers, 0));
+    vector2D goal = createSnailGoal(n);
 
-    std::vector<std::pair<vector2D, int>> closed;
+    std::priority_queue<State, std::vector<State>, CompareNode> opened;
+    std::unordered_map<StateHash, int> closed;
 
-    vector2D goalState = createSnailGoal(n);
+    // A* algorithm initialization
 
-    for (int i = 0; i < n; ++i) {
-        for (int j = 0; j < n; ++j) {
-            std::cout << goalState[i][j] << " ";
+    opened.push({ start, 0, Manhattan(start, goal) });
+
+    // {
+    //     // for debug
+    //     for (int i = 0; i < n; ++i) {
+    //         for (int j = 0; j < n; ++j) {
+    //             std::cout << goal[i][j] << " ";
+    //         }
+    //         std::cout << std::endl;
+    //     }
+    // }
+
+    // std::cout << "Initialized opened with the first configuration." << std::endl;
+
+    while (!opened.empty()) {
+        State cur = opened.top();
+        opened.pop();
+
+        StateHash h = makeHash(cur.board);
+
+        if (closed.count(h) && closed[h] <= cur.g) continue;
+        closed[h] = cur.g;
+
+        if (cur.board == goal) {
+            std::cout << "Goal reached with cost: " << cur.g << std::endl;
+            return 0;
         }
-        std::cout << std::endl;
+
+        std::vector<vector2D> next = expand(cur.board);
+        for (int i = 0; i < (int)next.size(); i++) {
+            State nextState;
+            nextState.board = next[i];
+            nextState.g = cur.g + 1;
+            nextState.h = Manhattan(next[i], goal);
+
+            opened.push(nextState);
+        }
     }
 
-    bool bSuccess = false;
-    std::cout << "Initialized opened with the first configuration." << std::endl;
-
-    while (!opened.empty() && !bSuccess)
-    {
-        // Select Best Node
-        std::pair<vector2D, int> e = selectBestNode(opened);
-
-        // Check Next Step
-        if (e.first == goalState)
-        {
-            bSuccess = true;
-            std::cout << "Goal state reached!" << std::endl;
-            std::cout << "Cost: " << e.second << std::endl;
-            break;
-        }
-
-        closed.push_back(e);
-
-        std::vector<vector2D> nextSteps;
-    
-        // 다음 방향 생성
-        nextSteps = getNextSteps(e.first);
-
-        std::cout << "Expanding node with cost " << e.second << ", generated " << nextSteps.size() << " next steps." << std::endl;
-
-        // 다음 방향들 중에서 opened와 closed에 없는 것들만 추가
-        for (const auto& step : nextSteps) {
-            bool inClosed = false;
-            for (const auto& closedState : closed) {
-                if (step == closedState.first) {
-                    inClosed = true;
-                    break;
-                }
-            }
-
-            if (inClosed) {
-                continue;
-            }
-
-            bool inOpened = false;
-            for (const auto& openedState : opened) {
-                if (step == openedState.first) {
-                    inOpened = true;
-                    break;
-                }
-            }
-
-            if (!inOpened && !inClosed) {
-                opened.push_back(std::make_pair(step, e.second + 1));
-            }
-        }
-        std::cout << "Opened size: " << opened.size() << ", Closed size: " << closed.size() << std::endl;
-    }
-
+    std::cout << "No Solution" << std::endl;
     return 0;
 }
